@@ -6,8 +6,9 @@ import IsolatorManager from './components/IsolatorManager';
 import InventoryManager from './components/InventoryManager';
 import ProjectProgressManager from './components/ProjectProgressManager';
 import ProjectSchedulingManager from './components/ProjectSchedulingManager';
+import ReservationManager from './components/ReservationManager';
 import NotificationSystem from './components/NotificationSystem';
-import { ProjectData, ViewState, Isolator, IsolatorStatus, InventoryItem, MouseGender, Administrator, SystemNotification } from './types';
+import { ProjectData, ViewState, Isolator, IsolatorStatus, InventoryItem, MouseGender, Administrator, SystemNotification, Reservation, ReservationStatus } from './types';
 
 // Helper to generate mock isolators
 const generateMockIsolators = (count: number): Isolator[] => {
@@ -45,6 +46,7 @@ const App: React.FC = () => {
   const [isolators, setIsolators] = useState<Isolator[]>([]);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [projects, setProjects] = useState<ProjectData[]>([]);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
   const [notifications, setNotifications] = useState<SystemNotification[]>([]);
 
   // Initialize Data
@@ -97,6 +99,34 @@ const App: React.FC = () => {
         { id: 'BATCH-001', strain: 'C57BL/6', gender: MouseGender.MALE, ageWeeks: 6, quantity: 150, lastUpdated: new Date().toLocaleTimeString() },
         { id: 'BATCH-002', strain: 'BALB/c', gender: MouseGender.FEMALE, ageWeeks: 8, quantity: 80, lastUpdated: new Date().toLocaleTimeString() },
         { id: 'BATCH-003', strain: 'Nude', gender: MouseGender.MALE, ageWeeks: 5, quantity: 45, lastUpdated: new Date().toLocaleTimeString() },
+    ]);
+
+    // Mock Reservations
+    setReservations([
+        { 
+            id: 'RES-00101', 
+            type: 'ISOLATOR', 
+            status: 'PENDING', 
+            applicant: 'Dr. Wu', 
+            createDate: '2024-05-10', 
+            startDate: '2024-06-01', 
+            endDate: '2024-07-01',
+            resourceId: 'ISO-105',
+            notes: 'Viral study preparation'
+        },
+        { 
+            id: 'RES-00102', 
+            type: 'INVENTORY', 
+            status: 'CONFIRMED', 
+            applicant: 'Lab Tech Sarah', 
+            createDate: '2024-05-12', 
+            startDate: '2024-05-20', 
+            endDate: '2024-05-20',
+            strain: 'BALB/c',
+            gender: MouseGender.FEMALE,
+            ageWeeks: 8,
+            quantity: 20
+        }
     ]);
   }, []);
 
@@ -282,6 +312,101 @@ const App: React.FC = () => {
       setProjects(prev => prev.map(p => p.id === updatedProject.id ? updatedProject : p));
   };
 
+  const handleAddReservation = (res: Reservation) => {
+      setReservations(prev => [res, ...prev]);
+      addNotification('Booking Submitted', `${res.type} reservation for ${res.applicant} is pending.`, 'INFO');
+  };
+
+  const handleReservationStatusUpdate = (id: string, status: ReservationStatus) => {
+      const res = reservations.find(r => r.id === id);
+      if (!res) return;
+      
+      const oldStatus = res.status;
+
+      // Update the reservation state
+      setReservations(prev => prev.map(r => 
+          r.id === id ? { ...r, status } : r
+      ));
+
+      // Handle Inventory Logic on Confirmation/Cancellation
+      if (res.type === 'INVENTORY' && res.quantity && res.strain) {
+          
+          // Case 1: CONFIRMING -> Deduct Stock
+          if (status === 'CONFIRMED' && oldStatus !== 'CONFIRMED') {
+              setInventory(prevInv => {
+                  // Find best matching batch
+                  const matchIndex = prevInv.findIndex(item => 
+                      item.strain.toLowerCase() === res.strain?.toLowerCase() &&
+                      item.gender === res.gender &&
+                      item.ageWeeks === res.ageWeeks
+                  );
+
+                  if (matchIndex !== -1) {
+                      // Deduct from existing
+                      const newInv = [...prevInv];
+                      newInv[matchIndex] = {
+                          ...newInv[matchIndex],
+                          quantity: newInv[matchIndex].quantity - (res.quantity || 0),
+                          lastUpdated: new Date().toLocaleString()
+                      };
+                      return newInv;
+                  } else {
+                      // No match found, create negative stock entry (debt)
+                      const newItem: InventoryItem = {
+                          id: `BATCH-RES-${Date.now().toString().slice(-4)}`,
+                          strain: res.strain!,
+                          gender: res.gender!,
+                          ageWeeks: res.ageWeeks || 0,
+                          quantity: -(res.quantity || 0),
+                          lastUpdated: new Date().toLocaleString()
+                      };
+                      return [...prevInv, newItem];
+                  }
+              });
+              addNotification('Stock Updated', `Inventory deducted automatically for Reservation ${id}`, 'WARNING');
+          }
+          
+          // Case 2: CANCELLING (after confirm) -> Restock (Refund)
+          else if (status === 'CANCELLED' && oldStatus === 'CONFIRMED') {
+               setInventory(prevInv => {
+                  // Find match to add back
+                  const matchIndex = prevInv.findIndex(item => 
+                      item.strain.toLowerCase() === res.strain?.toLowerCase() &&
+                      item.gender === res.gender &&
+                      item.ageWeeks === res.ageWeeks
+                  );
+
+                  if (matchIndex !== -1) {
+                      const newInv = [...prevInv];
+                      newInv[matchIndex] = {
+                          ...newInv[matchIndex],
+                          quantity: newInv[matchIndex].quantity + (res.quantity || 0),
+                          lastUpdated: new Date().toLocaleString()
+                      };
+                      return newInv;
+                  } else {
+                       const newItem: InventoryItem = {
+                          id: `BATCH-REFUND-${Date.now().toString().slice(-4)}`,
+                          strain: res.strain!,
+                          gender: res.gender!,
+                          ageWeeks: res.ageWeeks || 0,
+                          quantity: (res.quantity || 0),
+                          lastUpdated: new Date().toLocaleString()
+                      };
+                      return [...prevInv, newItem];
+                  }
+              });
+              addNotification('Stock Restored', `Inventory returned from Cancelled Reservation ${id}`, 'SUCCESS');
+          }
+      }
+
+      if (status === 'CONFIRMED') {
+        addNotification('Booking Confirmed', `Reservation ${id} has been approved.`, 'SUCCESS');
+      } else if (status === 'CANCELLED') {
+        addNotification('Booking Cancelled', `Reservation ${id} has been cancelled.`, 'WARNING');
+      }
+  };
+
   return (
     <div className="min-h-screen bg-tech-dark text-tech-text selection:bg-cyan-200 selection:text-cyan-900 pb-20 font-sans">
       <Header currentView={view} onNavigate={setView} />
@@ -354,6 +479,16 @@ const App: React.FC = () => {
             <ProjectProgressManager
                 projects={projects}
                 onUpdateProject={handleProjectUpdate}
+            />
+        )}
+
+        {view === 'RESERVATIONS' && (
+            <ReservationManager
+                reservations={reservations}
+                isolators={isolators}
+                inventory={inventory}
+                onAddReservation={handleAddReservation}
+                onUpdateStatus={handleReservationStatusUpdate}
             />
         )}
       </main>

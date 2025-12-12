@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Database, ShieldCheck, LayoutGrid, Box, ClipboardList, TrendingUp, CalendarClock } from 'lucide-react';
+import { Activity, Database, ShieldCheck, LayoutGrid, Box, ClipboardList, TrendingUp, CalendarClock, Bookmark } from 'lucide-react';
 import { ViewState } from '../types';
 
 interface HeaderProps {
@@ -12,6 +12,7 @@ const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
     { id: 'FORM', label: '项目录入', icon: ClipboardList },
     { id: 'SCHEDULING', label: '项目排期', icon: CalendarClock },
     { id: 'PROGRESS', label: '项目进度', icon: TrendingUp },
+    { id: 'RESERVATIONS', label: '资源预订', icon: Bookmark },
     { id: 'ISOLATORS', label: '隔离包管理', icon: Box },
     { id: 'INVENTORY', label: '库存管理', icon: LayoutGrid },
   ];

@@ -67,7 +67,7 @@ export interface ProjectData {
   scheduling?: ProjectScheduling;
 }
 
-export type ViewState = 'DASHBOARD' | 'FORM' | 'PREVIEW' | 'ISOLATORS' | 'INVENTORY' | 'PROGRESS' | 'SCHEDULING';
+export type ViewState = 'DASHBOARD' | 'FORM' | 'PREVIEW' | 'ISOLATORS' | 'INVENTORY' | 'PROGRESS' | 'SCHEDULING' | 'RESERVATIONS';
 
 export enum IsolatorStatus {
   IN_USE = '使用中 (In Use)',
@@ -112,4 +112,28 @@ export interface SystemNotification {
   message: string;
   type: 'SUCCESS' | 'INFO' | 'WARNING' | 'EMAIL';
   timestamp: number;
+}
+
+// RESERVATION TYPES
+export type ReservationType = 'ISOLATOR' | 'INVENTORY';
+export type ReservationStatus = 'PENDING' | 'CONFIRMED' | 'FULFILLED' | 'CANCELLED';
+
+export interface Reservation {
+  id: string;
+  type: ReservationType;
+  status: ReservationStatus;
+  applicant: string; // Who made the reservation
+  createDate: string;
+  startDate: string;
+  endDate: string;
+  notes?: string;
+  
+  // Resource Details (Optional based on type)
+  resourceId?: string; // For Isolator (Specific ID)
+  
+  // Inventory Details
+  strain?: string;
+  gender?: MouseGender;
+  ageWeeks?: number;
+  quantity?: number;
 }
